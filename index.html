@@ -158,6 +158,12 @@
   .points-badge.zero{background:#a8a29e;}
   .s-name{font-size:12.5px;font-weight:700;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .att-toggle{margin-top:6px;border:none;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;}
+  /* nút gạt 3 lựa chọn: Có mặt / Vắng / Đi trễ — thay cho kiểu bấm-để-xoay-vòng trạng thái cũ */
+  .att-segment{display:flex;gap:3px;background:#f2f4f8;border-radius:999px;padding:3px;margin-top:6px;cursor:default;}
+  .att-segment button{flex:1;border:none;background:none;padding:5px 3px;border-radius:999px;font-size:10px;font-weight:800;cursor:pointer;color:var(--muted);white-space:nowrap;transition:.15s ease;}
+  .att-segment button.active.st-present{background:var(--green-bg);color:var(--green);}
+  .att-segment button.active.st-absent{background:var(--red-bg);color:var(--red);}
+  .att-segment button.active.st-late{background:var(--blue-bg);color:var(--blue);}
   .sel-check{position:absolute;top:6px;left:6px;width:18px;height:18px;}
   /* small read-only status dot shown on cards in the "Tiết học" sub-tab, so a teacher can see at a glance
      who's absent while scoring, without the attendance controls cluttering that view */
@@ -402,7 +408,7 @@
                 <button data-sess="chieu" onclick="setAttSession('chieu')">🌙 Chiều</button>
               </div>
             </div>
-            <div class="muted" style="margin-top:8px;">Chạm vào thẻ học sinh hoặc nhãn điểm danh để chuyển trạng thái (Có mặt → Vắng → Đi trễ → Vắng có phép)</div>
+            <div class="muted" style="margin-top:8px;">Bấm nút Có mặt / Vắng / Đi trễ trên mỗi thẻ học sinh để đánh dấu. Bấm "Vắng" sẽ hiện popup chọn có phép hay không phép và nhập lý do.</div>
           </div>
 
           <!-- TIẾT HỌC controls -->
@@ -1736,18 +1742,22 @@ function renderSessionTab(){
     const card = document.createElement('div');
 
     if(isAtt){
-      // Điểm danh view: whole card cycles attendance status, reason pill for absent/excused
+      // Điểm danh view: nút gạt 3 lựa chọn (Có mặt / Vắng / Đi trễ) + nhãn lý do khi vắng/có phép
       const showReason = status==='absent' || status==='excused';
+      const segActive = (status==='absent' || status==='excused') ? 'absent' : status;
       card.className = 'student-card';
       card.innerHTML = `
         <div class="avatar-wrap">
           <div class="avatar">${avatarHTML(s, 42)}</div>
         </div>
         <div class="s-name">${escapeHtml(s.shortName || s.name)}</div>
-        <button class="att-toggle badge ${STATUS_CLASS[status]}" onclick="event.stopPropagation(); cycleAttendance('${s.id}')">${STATUS_LABELS[status]}</button>
+        <div class="att-segment" onclick="event.stopPropagation();">
+          <button class="${segActive==='present' ? 'active st-present':''}" onclick="setAttendanceStatus('${s.id}','present')">Có mặt</button>
+          <button class="${segActive==='absent' ? 'active st-absent':''}" onclick="setAttendanceStatus('${s.id}','absent')">Vắng</button>
+          <button class="${segActive==='late' ? 'active st-late':''}" onclick="setAttendanceStatus('${s.id}','late')">Đi trễ</button>
+        </div>
         ${showReason ? `<button class="reason-pill ${entry && entry.reasonCode ? 'has-reason':'no-reason'}" onclick="event.stopPropagation(); openReasonModal('${date}','${currentAttSession}','${s.id}')">${entry && entry.reasonCode ? '📝 '+REASON_LABELS_SHORT[entry.reasonCode] : '⚠️ Thêm lý do'}</button>` : ''}
       `;
-      card.addEventListener('click', ()=> cycleAttendance(s.id));
     } else {
       // Tiết học view: card opens the score popup; attendance shown only as a small read-only dot for context
       const dot = status!=='present' ? `<div class="att-dot ${STATUS_CLASS[status]}" title="${STATUS_LABELS[status]}"></div>` : '';
@@ -1802,20 +1812,18 @@ function renderAbsenceSummary(date){
   document.getElementById('absenceSummaryCount').textContent = rows.length ? `${rows.length} lượt vắng${missingCount?` · ${missingCount} chưa rõ lý do`:''}` : '';
 }
 
-function cycleAttendance(studentId){
+function setAttendanceStatus(studentId, kind){
+  // nút gạt 3 lựa chọn: 'present'/'late' áp dụng ngay, 'absent' mở popup chọn có phép/không phép + lý do
   const date = sessDateInput.value;
+  if(kind==='absent'){
+    openReasonModal(date, currentAttSession, studentId);
+    return;
+  }
   const bucket = ensureAttendanceSession(date, currentAttSession);
-  const current = bucket[studentId] ? bucket[studentId].status : 'present';
-  const idx = STATUS_ORDER.indexOf(current);
-  const next = STATUS_ORDER[(idx+1) % STATUS_ORDER.length];
-  const prevEntry = bucket[studentId] || {};
-  bucket[studentId] = {status: next, reasonCode: prevEntry.reasonCode, reasonNote: prevEntry.reasonNote};
+  bucket[studentId] = {status: kind};
   saveAttendanceData();
   syncAttendanceDate(date);
   renderSessionTab();
-  if(next==='absent' || next==='excused'){
-    openReasonModal(date, currentAttSession, studentId);
-  }
 }
 function markAllPresent(){
   const date = sessDateInput.value;
@@ -1830,19 +1838,24 @@ function markAllPresent(){
 function openReasonModal(date, session, studentId){
   reasonContext = {date, session, studentId};
   const entry = getAttendanceEntry(date, session, studentId) || {};
-  document.getElementById('rs_code').value = entry.reasonCode || 'paper';
+  document.getElementById('rs_code').value = entry.reasonCode || 'none';
   document.getElementById('rs_note').value = entry.reasonNote || '';
   const s = students.find(x=>x.id===studentId);
-  document.getElementById('reasonModalTitle').textContent = 'Lý do vắng: ' + (s?s.name:'');
+  document.getElementById('reasonModalTitle').textContent = 'Vắng — có phép hay không phép? ' + (s?s.name:'');
   document.getElementById('reasonModalOverlay').classList.add('open');
 }
 function closeReasonModal(){ document.getElementById('reasonModalOverlay').classList.remove('open'); }
 function saveReason(){
   const {date, session, studentId} = reasonContext;
   const bucket = ensureAttendanceSession(date, session);
-  if(!bucket[studentId]) bucket[studentId] = {status:'absent'};
-  bucket[studentId].reasonCode = document.getElementById('rs_code').value;
-  bucket[studentId].reasonNote = document.getElementById('rs_note').value.trim();
+  const reasonCode = document.getElementById('rs_code').value;
+  // reasonCode 'none' = không phép -> status 'absent'; 'paper'/'parent' = có phép -> status 'excused'
+  const status = reasonCode==='none' ? 'absent' : 'excused';
+  bucket[studentId] = {
+    status,
+    reasonCode,
+    reasonNote: document.getElementById('rs_note').value.trim()
+  };
   saveAttendanceData();
   syncAttendanceDate(date);
   closeReasonModal();
