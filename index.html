@@ -145,7 +145,7 @@
   details.more .form-grid{margin-bottom:12px;}
 
   /* student cards (used in Buổi học - live session) */
-  .student-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:14px;}
+  .student-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(134px,1fr));gap:14px;}
   .student-card{background:#fff;border-radius:18px;padding:14px 8px 10px;text-align:center;box-shadow:var(--shadow-softer);cursor:pointer;position:relative;border:2px solid transparent;transition:.15s ease;}
   .student-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-soft);}
   .student-card.selected{border-color:var(--accent);background:#fff5f7;box-shadow:0 4px 14px rgba(243,166,178,.3);}
@@ -159,11 +159,13 @@
   .s-name{font-size:12.5px;font-weight:700;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .att-toggle{margin-top:6px;border:none;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;}
   /* nút gạt 3 lựa chọn: Có mặt / Vắng / Đi trễ — thay cho kiểu bấm-để-xoay-vòng trạng thái cũ */
-  .att-segment{display:flex;gap:3px;background:#f2f4f8;border-radius:999px;padding:3px;margin-top:6px;cursor:default;}
-  .att-segment button{flex:1;border:none;background:none;padding:5px 3px;border-radius:999px;font-size:10px;font-weight:800;cursor:pointer;color:var(--muted);white-space:nowrap;transition:.15s ease;}
-  .att-segment button.active.st-present{background:var(--green-bg);color:var(--green);}
-  .att-segment button.active.st-absent{background:var(--red-bg);color:var(--red);}
-  .att-segment button.active.st-late{background:var(--blue-bg);color:var(--blue);}
+  .att-segment{display:flex;gap:2px;background:#eceff5;border-radius:999px;padding:3px;margin-top:6px;cursor:default;box-shadow:inset 0 1px 3px rgba(0,0,0,.08);}
+  .att-segment button{flex:1;min-width:0;border:none;background:transparent;padding:5px 2px;border-radius:999px;font-size:10px;font-weight:800;cursor:pointer;color:#a7aec2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:.15s ease;}
+  .att-segment button:not(.active):hover{color:#7b8296;}
+  .att-segment button.active{color:#fff;transform:translateY(-1px);box-shadow:0 3px 6px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.35);}
+  .att-segment button.active.st-present{background:var(--green);}
+  .att-segment button.active.st-absent{background:var(--red);}
+  .att-segment button.active.st-late{background:var(--blue);}
   .sel-check{position:absolute;top:6px;left:6px;width:18px;height:18px;}
   /* small read-only status dot shown on cards in the "Tiết học" sub-tab, so a teacher can see at a glance
      who's absent while scoring, without the attendance controls cluttering that view */
@@ -602,7 +604,7 @@
         <input id="f_shortName" placeholder="VD: An">
       </label>
       <label>Biệt danh khi điểm danh <span class="muted" style="font-weight:400;">(tùy chọn)</span>
-        <input id="f_nickname" placeholder="Để trống sẽ tự viết tắt, VD: Đ.M.Anh">
+        <input id="f_nickname" placeholder="Để trống sẽ tự lấy tên lót+tên, VD: Mai Anh">
       </label>
       <label>Giới tính
         <select id="f_gender"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select>
@@ -908,19 +910,17 @@ function blankStudent(){
   return o;
 }
 
-// Viết tắt họ + tên lót, giữ nguyên tên chính. VD: "Đoàn Mai Anh" -> "Đ.M.Anh"
-function abbreviateName(fullName){
+// Lấy tên lót + tên chính (2 từ cuối họ tên) để dễ phân biệt học sinh trùng tên gọi. VD: "Đoàn Mai Anh" -> "Mai Anh"
+function lastTwoWords(fullName){
   const parts = (fullName||'').trim().split(/\s+/).filter(Boolean);
   if(parts.length <= 1) return fullName || '';
-  const given = parts[parts.length-1];
-  const initials = parts.slice(0,-1).map(w=> w.charAt(0).toUpperCase()).join('.');
-  return initials + '.' + given;
+  return parts.slice(-2).join(' ');
 }
-// Tên hiển thị ở thẻ điểm danh/tiết học: ưu tiên biệt danh Cô tự đặt, sau đó tới viết tắt họ tên lót, cuối cùng là tên gọi/tên đầy đủ
+// Tên hiển thị ở thẻ điểm danh/tiết học: ưu tiên biệt danh Cô tự đặt, sau đó tới tên lót+tên, cuối cùng là tên gọi/tên đầy đủ
 function displayShortName(s){
   if(s.nickname && s.nickname.trim()) return s.nickname.trim();
-  const abbr = abbreviateName(s.name);
-  return abbr || s.shortName || s.name;
+  const two = lastTwoWords(s.name);
+  return two || s.shortName || s.name;
 }
 
 function saveStudents(){ localStorage.setItem(LS_STUDENTS, JSON.stringify(students)); }
