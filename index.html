@@ -87,6 +87,11 @@
     .main-wrap{margin-left:0;}
     .hamburger{display:block;}
   }
+  @media (max-width:560px){
+    .student-form-layout{flex-direction:column;align-items:center;}
+    .student-form-layout .avatar-picker{width:100%;}
+    .student-form-layout .form-grid{width:100%;}
+  }
 
   .card{background:var(--card);border-radius:20px;padding:18px 20px;box-shadow:var(--shadow-softer);margin-bottom:16px;border:1px solid var(--border);}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -132,6 +137,7 @@
   .modal{background:#fff;border-radius:22px;max-width:660px;width:100%;padding:24px;}
   .modal h3{font-family:var(--font-cute);}
   .modal.narrow{max-width:420px;}
+  .modal.wide{max-width:760px;}
   /* quick-score popup: floats next to the tapped student instead of a full centered modal */
   #scoreModalOverlay{background:rgba(17,20,28,.08);}
   #scoreModalOverlay.open{display:block;}
@@ -262,6 +268,12 @@
   .avatar-picker{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);}
   .avatar-picker .side{flex:1;min-width:180px;}
   .avatar-picker input[type=file]{font-size:12px;width:100%;}
+  /* modal Thêm/Sửa học sinh: ảnh bên trái, form bên phải */
+  .student-form-layout{display:flex;gap:20px;align-items:flex-start;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+  .student-form-layout .avatar-picker{display:flex;flex-direction:column;align-items:center;gap:8px;width:150px;flex-shrink:0;text-align:center;margin-bottom:0;padding-bottom:0;border-bottom:none;}
+  .student-form-layout .avatar-picker .side{width:100%;}
+  .student-form-layout .form-grid{flex:1;min-width:0;margin-bottom:0;}
+  .avatar-picker .file-btn{display:block;width:100%;text-align:center;cursor:pointer;box-sizing:border-box;}
 
   .comment-item{padding:8px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
   .comment-item .top{display:flex;align-items:center;gap:8px;}
@@ -602,46 +614,46 @@
 
 <!-- STUDENT MODAL -->
 <div class="modal-overlay" id="studentModalOverlay">
-  <div class="modal">
+  <div class="modal wide">
     <h3 id="studentModalTitle">Thêm học sinh</h3>
 
-    <div class="avatar-picker">
-      <div id="photoPreviewBox" class="avatar-circle" style="width:64px;height:64px;"></div>
-      <div class="side">
-        <input type="file" id="f_photoFile" accept="image/*">
-        <div class="row" style="margin-top:6px;gap:6px;">
-          <button type="button" class="btn secondary small" onclick="removePendingPhoto()">Xóa ảnh</button>
-          <button type="button" class="btn secondary small" onclick="openAvatarGallery()">🖼️ Chọn từ bộ sưu tập</button>
+    <div class="student-form-layout">
+      <div class="avatar-picker">
+        <div id="photoPreviewBox" class="avatar-circle" style="width:120px;height:120px;"></div>
+        <div class="side">
+          <input type="file" id="f_photoFile" accept="image/*" style="display:none;">
+          <label for="f_photoFile" class="btn secondary small file-btn">📷 Chọn ảnh mới</label>
+          <button type="button" class="btn secondary small" style="display:block;width:100%;box-sizing:border-box;margin-top:6px;" onclick="openAvatarGallery()">🖼️ Chọn hình Chibi</button>
+          <button type="button" class="btn secondary small" style="display:block;width:100%;box-sizing:border-box;margin-top:6px;" onclick="removePendingPhoto()">🗑️ Xóa ảnh</button>
         </div>
-        <div class="muted" style="margin-top:4px;">Tải ảnh chân dung (tùy chọn), hoặc chọn 1 avatar chibi từ bộ sưu tập 30 mẫu.</div>
       </div>
-    </div>
 
-    <div class="form-grid">
-      <label class="full">Họ và tên *
-        <input id="f_name" placeholder="Nguyễn Văn A">
-      </label>
-      <label>Tên gọi
-        <input id="f_shortName" placeholder="VD: An">
-      </label>
-      <label>Biệt danh khi điểm danh <span class="muted" style="font-weight:400;">(tùy chọn)</span>
-        <input id="f_nickname" placeholder="Để trống sẽ tự lấy tên lót+tên, VD: Mai Anh">
-      </label>
-      <label>Giới tính
-        <select id="f_gender"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select>
-      </label>
-      <label>Ngày sinh
-        <input type="date" id="f_dob">
-      </label>
-      <label>Số điện thoại liên hệ
-        <input id="f_phone" placeholder="09xxxxxxxx">
-      </label>
-      <label class="full">Điểm mạnh
-        <textarea id="f_strengths" rows="2" placeholder="VD: học tốt Toán, hát hay, hòa đồng..."></textarea>
-      </label>
-      <label class="full">Điểm cần cải thiện
-        <textarea id="f_improvements" rows="2" placeholder="VD: cần tập trung hơn, viết chữ chưa đẹp..."></textarea>
-      </label>
+      <div class="form-grid">
+        <label class="full">Họ và tên *
+          <input id="f_name" placeholder="Nguyễn Văn A">
+        </label>
+        <label>Tên gọi
+          <input id="f_shortName" placeholder="VD: An">
+        </label>
+        <label>Biệt danh khi điểm danh <span class="muted" style="font-weight:400;">(tùy chọn)</span>
+          <input id="f_nickname" placeholder="Để trống sẽ tự lấy tên lót+tên, VD: Mai Anh">
+        </label>
+        <label>Giới tính
+          <select id="f_gender"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select>
+        </label>
+        <label>Ngày sinh
+          <input type="date" id="f_dob">
+        </label>
+        <label>Số điện thoại liên hệ
+          <input id="f_phone" placeholder="09xxxxxxxx">
+        </label>
+        <label class="full">Điểm mạnh
+          <textarea id="f_strengths" rows="2" placeholder="VD: học tốt Toán, hát hay, hòa đồng..."></textarea>
+        </label>
+        <label class="full">Điểm cần cải thiện
+          <textarea id="f_improvements" rows="2" placeholder="VD: cần tập trung hơn, viết chữ chưa đẹp..."></textarea>
+        </label>
+      </div>
     </div>
 
     <details class="more">
@@ -1351,7 +1363,7 @@ function updatePhotoPreview(){
   let photo;
   if(pendingPhoto === undefined) photo = s ? s.photo : null;
   else photo = pendingPhoto; // could be null (removed) or a dataURL
-  box.innerHTML = photo ? `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">` : presetImgHTML(effectivePreset(), 64);
+  box.innerHTML = photo ? `<img src="${photo}" style="width:100%;height:100%;object-fit:cover;">` : presetImgHTML(effectivePreset(), 120);
 }
 document.getElementById('f_photoFile').addEventListener('change', async function(evt){
   const file = evt.target.files[0];
