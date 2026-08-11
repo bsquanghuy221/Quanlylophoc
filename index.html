@@ -555,32 +555,58 @@
       <!-- TAB: MONTHLY REPORT (Báo cáo tháng gửi phụ huynh) -->
       <section id="tab-report" style="display:none;">
         <div class="card">
-          <div class="row between">
-            <div class="row">
-              <label style="font-size:13px;color:var(--muted);font-weight:700;">Học sinh</label>
-              <select id="rp_student" style="min-width:200px;"></select>
-              <label style="font-size:13px;color:var(--muted);font-weight:700;margin-left:6px;">Tháng</label>
-              <input type="month" id="rp_month">
+          <div class="tab-toggle" id="reportModeToggle" style="margin-bottom:12px;">
+            <button data-mode="single" class="active" onclick="setReportMode('single')">👤 Từng học sinh</button>
+            <button data-mode="batch" onclick="setReportMode('batch')">👥 Cả lớp</button>
+          </div>
+
+          <div id="reportSingleControls">
+            <div class="row between">
+              <div class="row">
+                <label style="font-size:13px;color:var(--muted);font-weight:700;">Học sinh</label>
+                <select id="rp_student" style="min-width:200px;"></select>
+                <label style="font-size:13px;color:var(--muted);font-weight:700;margin-left:6px;">Tháng</label>
+                <input type="month" id="rp_month">
+              </div>
+              <button class="btn small" onclick="generateMonthlyReport()">🔄 Tạo báo cáo</button>
             </div>
-            <button class="btn small" onclick="generateMonthlyReport()">🔄 Tạo báo cáo</button>
+            <div style="margin-top:12px;">
+              <label style="font-size:13px;color:var(--muted);font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)</label>
+              <textarea id="rp_note" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..."></textarea>
+            </div>
           </div>
-          <div style="margin-top:12px;">
-            <label style="font-size:13px;color:var(--muted);font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)</label>
-            <textarea id="rp_note" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..."></textarea>
+
+          <div id="reportBatchControls" style="display:none;">
+            <div class="row between">
+              <div class="row">
+                <label style="font-size:13px;color:var(--muted);font-weight:700;">Tháng</label>
+                <input type="month" id="rpb_month">
+              </div>
+              <button class="btn small" onclick="generateBatchReports()">🔄 Tạo báo cáo cho cả lớp</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">App sẽ tạo sẵn báo cáo cho toàn bộ học sinh theo tháng đã chọn — cuộn xuống, viết thêm lời nhắn riêng cho từng em rồi tải PDF/ảnh để gửi phụ huynh.</div>
           </div>
+
           <div class="muted" style="margin-top:8px;">App chưa có máy chủ để tạo link xem online, nên báo cáo được xuất thành ảnh / PDF / văn bản để gửi trực tiếp qua Zalo hoặc tin nhắn cho phụ huynh.</div>
         </div>
 
-        <div class="card" id="reportPreviewCard" style="display:none;">
-          <div class="report-card" id="reportPreview"></div>
-          <div class="row report-actions" style="margin-top:16px;">
-            <button class="btn" onclick="downloadReportPDF()">📄 Tải file PDF</button>
-            <button class="btn secondary" onclick="downloadReportImage()">🖼️ Tải ảnh báo cáo</button>
-            <button class="btn secondary" onclick="printReport()">🖨️ In trực tiếp</button>
-            <button class="btn secondary" onclick="copyReportText()">📋 Sao chép nội dung</button>
+        <div id="reportSingleResult">
+          <div class="card" id="reportPreviewCard" style="display:none;">
+            <div class="report-card" id="reportPreview"></div>
+            <div class="row report-actions" style="margin-top:16px;">
+              <button class="btn" onclick="downloadReportPDF()">📄 Tải file PDF</button>
+              <button class="btn secondary" onclick="downloadReportImage()">🖼️ Tải ảnh báo cáo</button>
+              <button class="btn secondary" onclick="printReport()">🖨️ In trực tiếp</button>
+              <button class="btn secondary" onclick="copyReportText()">📋 Sao chép nội dung</button>
+            </div>
           </div>
+          <div id="reportEmpty" class="empty">Chọn học sinh và tháng, sau đó bấm "Tạo báo cáo" để xem trước.</div>
         </div>
-        <div id="reportEmpty" class="empty">Chọn học sinh và tháng, sau đó bấm "Tạo báo cáo" để xem trước.</div>
+
+        <div id="reportBatchResult" style="display:none;">
+          <div id="reportBatchList"></div>
+          <div id="reportBatchEmpty" class="empty">Chọn tháng rồi bấm "Tạo báo cáo cho cả lớp" để bắt đầu.</div>
+        </div>
       </section>
 
     </main>
@@ -2457,7 +2483,10 @@ function exportComments(){
 // ================= MONTHLY REPORT (Báo cáo tháng gửi phụ huynh) =================
 // No hosting available for a live "view online" link, so the monthly summary is exported as an
 // image / PDF (via browser print) / plain text instead — all easy to paste or attach in Zalo.
+// 2 chế độ: "single" (chọn từng học sinh) và "batch" (tạo sẵn cho cả lớp cùng lúc, mỗi em có ô
+// nhận xét + nút tải riêng). Cả 2 dùng chung logic tính toán/render báo cáo bên dưới.
 let reportContext = null;
+let batchReportContexts = {};
 
 function initReportTab(){
   const sel = document.getElementById('rp_student');
@@ -2466,13 +2495,24 @@ function initReportTab(){
   if(students.some(s=>s.id===prevValue)) sel.value = prevValue;
   const monthInput = document.getElementById('rp_month');
   if(!monthInput.value) monthInput.value = new Date().toISOString().slice(0,7);
+  const monthInputB = document.getElementById('rpb_month');
+  if(!monthInputB.value) monthInputB.value = new Date().toISOString().slice(0,7);
 }
 // jump to the Báo cáo tháng tab pre-filled for one student (used by the "📮 Báo cáo tháng" button in student detail)
 function goToStudentReport(studentId){
   goTab('report');
+  setReportMode('single');
   const sel = document.getElementById('rp_student');
   if([...sel.options].some(o=>o.value===studentId)) sel.value = studentId;
   generateMonthlyReport();
+}
+
+function setReportMode(mode){
+  document.querySelectorAll('#reportModeToggle button').forEach(b=> b.classList.toggle('active', b.dataset.mode===mode));
+  document.getElementById('reportSingleControls').style.display = mode==='single' ? '' : 'none';
+  document.getElementById('reportBatchControls').style.display = mode==='batch' ? '' : 'none';
+  document.getElementById('reportSingleResult').style.display = mode==='single' ? '' : 'none';
+  document.getElementById('reportBatchResult').style.display = mode==='batch' ? '' : 'none';
 }
 
 function monthRange(monthStr){
@@ -2523,26 +2563,22 @@ function commentsForRange(studentId, start, end){
     .sort((a,b)=> a.date.localeCompare(b.date) || a.ts-b.ts);
 }
 
-function generateMonthlyReport(){
-  const studentId = document.getElementById('rp_student').value;
-  const monthVal = document.getElementById('rp_month').value;
-  if(!studentId){ toast('Vui lòng chọn học sinh'); return; }
-  if(!monthVal){ toast('Vui lòng chọn tháng'); return; }
-  const s = students.find(x=>x.id===studentId);
-  if(!s) return;
+// tính toán dữ liệu báo cáo của 1 học sinh trong 1 tháng (dùng chung cho cả 2 chế độ)
+function buildReportContext(s, monthVal, note){
   const {start, end, m, y} = monthRange(monthVal);
-  const att = attendanceStatsForRange(studentId, start, end);
-  const pts = pointsBreakdownForRange(studentId, start, end);
-  const cmts = commentsForRange(studentId, start, end);
-  const note = document.getElementById('rp_note').value.trim();
+  const att = attendanceStatsForRange(s.id, start, end);
+  const pts = pointsBreakdownForRange(s.id, start, end);
+  const cmts = commentsForRange(s.id, start, end);
   const monthLabel = `Tháng ${m}/${y}`;
+  return {studentId: s.id, studentName: s.name, month: monthVal, monthLabel, att, pts, cmts, note: note || ''};
+}
 
-  reportContext = {studentId, studentName:s.name, month:monthVal, monthLabel, att, pts, cmts, note};
-
+// render nội dung HTML của báo cáo (dùng chung cho preview 1 em và cho từng thẻ trong chế độ cả lớp)
+function renderReportBodyHTML(s, ctx){
+  const {att, pts, cmts, note, monthLabel} = ctx;
   const positives = pts.list.filter(c=>c.type==='positive');
   const negatives = pts.list.filter(c=>c.type==='negative');
-
-  document.getElementById('reportPreview').innerHTML = `
+  return `
     <div style="text-align:center;margin-bottom:16px;">
       <div class="avatar" style="display:flex;justify-content:center;">${avatarHTML(s,72)}</div>
       <h2 style="margin:8px 0 2px;">${escapeHtml(s.name)}</h2>
@@ -2574,14 +2610,75 @@ function generateMonthlyReport(){
     </div>
     ${note ? `<div class="detail-section"><h4>💌 Lời nhắn của giáo viên</h4><p style="white-space:pre-wrap;">${escapeHtml(note)}</p></div>` : ''}
   `;
+}
+
+function generateMonthlyReport(){
+  const studentId = document.getElementById('rp_student').value;
+  const monthVal = document.getElementById('rp_month').value;
+  if(!studentId){ toast('Vui lòng chọn học sinh'); return; }
+  if(!monthVal){ toast('Vui lòng chọn tháng'); return; }
+  const s = students.find(x=>x.id===studentId);
+  if(!s) return;
+  const note = document.getElementById('rp_note').value.trim();
+  reportContext = buildReportContext(s, monthVal, note);
+  document.getElementById('reportPreview').innerHTML = renderReportBodyHTML(s, reportContext);
   document.getElementById('reportPreviewCard').style.display = '';
   document.getElementById('reportEmpty').style.display = 'none';
 }
 
-function buildReportPlainText(){
-  if(!reportContext) return '';
-  const {studentName, monthLabel, att, pts, cmts, note} = reportContext;
-  const s = students.find(x=>x.id===reportContext.studentId) || {};
+// tạo báo cáo cho TOÀN BỘ học sinh trong lớp cùng lúc theo 1 tháng — mỗi em có ô nhận xét
+// và bộ nút tải riêng ngay bên dưới, không cần chọn/tạo từng em một như chế độ "Từng học sinh"
+function generateBatchReports(){
+  const monthVal = document.getElementById('rpb_month').value;
+  if(!monthVal){ toast('Vui lòng chọn tháng'); return; }
+  if(!students.length){ toast('Lớp chưa có học sinh nào'); return; }
+
+  // giữ lại lời nhắn đang gõ dở (nếu bấm tạo lại) để không bị mất
+  const prevNotes = {};
+  students.forEach(s=>{
+    const ta = document.getElementById('batchNote_'+s.id);
+    if(ta) prevNotes[s.id] = ta.value;
+  });
+
+  const sorted = [...students].sort(byGivenName);
+  batchReportContexts = {};
+  const list = document.getElementById('reportBatchList');
+  list.innerHTML = sorted.map(s=>{
+    const note = (prevNotes[s.id] || '').trim();
+    const ctx = buildReportContext(s, monthVal, note);
+    batchReportContexts[s.id] = ctx;
+    return `
+      <div class="card">
+        <div class="report-card" id="batchPreview_${s.id}">${renderReportBodyHTML(s, ctx)}</div>
+        <div style="margin-top:10px;">
+          <label class="muted" style="font-size:12px;font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)</label>
+          <textarea id="batchNote_${s.id}" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..." oninput="updateBatchNote('${s.id}')">${escapeHtml(note)}</textarea>
+        </div>
+        <div class="row report-actions" style="margin-top:12px;">
+          <button class="btn small" onclick="downloadReportPDFFor('${s.id}')">📄 Tải PDF</button>
+          <button class="btn secondary small" onclick="downloadReportImageFor('${s.id}')">🖼️ Tải ảnh</button>
+          <button class="btn secondary small" onclick="copyReportTextFor('${s.id}')">📋 Sao chép</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('reportBatchEmpty').style.display = 'none';
+  toast(`Đã tạo báo cáo cho ${sorted.length} học sinh`);
+}
+
+// gõ lời nhắn cho 1 em trong chế độ cả lớp -> cập nhật lại preview của đúng thẻ đó (không đụng các thẻ khác)
+function updateBatchNote(studentId){
+  const ctx = batchReportContexts[studentId];
+  const s = students.find(x=>x.id===studentId);
+  if(!ctx || !s) return;
+  ctx.note = document.getElementById('batchNote_'+studentId).value.trim();
+  document.getElementById('batchPreview_'+studentId).innerHTML = renderReportBodyHTML(s, ctx);
+}
+
+function buildReportPlainTextFor(ctx){
+  if(!ctx) return '';
+  const {studentName, monthLabel, att, pts, cmts, note} = ctx;
+  const s = students.find(x=>x.id===ctx.studentId) || {};
   const lines = [];
   lines.push(`BÁO CÁO ${monthLabel.toUpperCase()} — ${studentName}`);
   if(classNameInput.value) lines.push(`Lớp: ${classNameInput.value}`);
@@ -2603,9 +2700,10 @@ function buildReportPlainText(){
   return lines.join('\n');
 }
 
-function copyReportText(){
-  if(!reportContext){ toast('Vui lòng tạo báo cáo trước'); return; }
-  const text = buildReportPlainText();
+function copyReportTextFor(studentId){
+  const ctx = studentId ? batchReportContexts[studentId] : reportContext;
+  if(!ctx){ toast('Vui lòng tạo báo cáo trước'); return; }
+  const text = buildReportPlainTextFor(ctx);
   if(navigator.clipboard && navigator.clipboard.writeText){
     navigator.clipboard.writeText(text)
       .then(()=> toast('Đã sao chép nội dung — dán vào Zalo/Messenger để gửi'))
@@ -2614,33 +2712,37 @@ function copyReportText(){
     toast('Trình duyệt không hỗ trợ sao chép tự động');
   }
 }
+function copyReportText(){ copyReportTextFor(null); }
 
 // strips Vietnamese diacritics so the downloaded filename is plain ASCII (safer across OS/apps)
 function safeFileName(name){
   return String(name||'').replace(/[\u0111\u0110]/g,'d').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'-');
 }
 
-function downloadReportImage(){
-  if(!reportContext){ toast('Vui lòng tạo báo cáo trước'); return; }
+function downloadReportImageFor(studentId){
+  const ctx = studentId ? batchReportContexts[studentId] : reportContext;
+  const el = studentId ? document.getElementById('batchPreview_'+studentId) : document.getElementById('reportPreview');
+  if(!ctx){ toast('Vui lòng tạo báo cáo trước'); return; }
   if(!window.html2canvas){ toast('Không tải được thư viện xuất ảnh (cần kết nối mạng) — hãy thử "Tải file PDF" thay thế'); return; }
-  const el = document.getElementById('reportPreview');
   toast('Đang tạo ảnh báo cáo...');
   html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true}).then(canvas=>{
     const link = document.createElement('a');
-    link.download = `bao-cao-${reportContext.month}-${safeFileName(reportContext.studentName)}.png`;
+    link.download = `bao-cao-${ctx.month}-${safeFileName(ctx.studentName)}.png`;
     link.href = canvas.toDataURL('image/png');
     document.body.appendChild(link);
     link.click();
     link.remove();
   }).catch(()=> toast('Không tạo được ảnh, hãy thử "Tải file PDF" thay thế'));
 }
+function downloadReportImage(){ downloadReportImageFor(null); }
 
 // renders the report to canvas then packs it into an actual downloadable .pdf file
 // (paginated across multiple A4 pages if the content is taller than one page)
-function downloadReportPDF(){
-  if(!reportContext){ toast('Vui lòng tạo báo cáo trước'); return; }
+function downloadReportPDFFor(studentId){
+  const ctx = studentId ? batchReportContexts[studentId] : reportContext;
+  const el = studentId ? document.getElementById('batchPreview_'+studentId) : document.getElementById('reportPreview');
+  if(!ctx){ toast('Vui lòng tạo báo cáo trước'); return; }
   if(!window.html2canvas || !window.jspdf){ toast('Không tải được thư viện xuất PDF (cần kết nối mạng) — hãy thử "In trực tiếp" (Ctrl+P) rồi chọn Lưu thành PDF'); return; }
-  const el = document.getElementById('reportPreview');
   toast('Đang tạo file PDF...');
   html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true}).then(canvas=>{
     const { jsPDF } = window.jspdf;
@@ -2660,9 +2762,10 @@ function downloadReportPDF(){
       pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
-    pdf.save(`bao-cao-${reportContext.month}-${safeFileName(reportContext.studentName)}.pdf`);
+    pdf.save(`bao-cao-${ctx.month}-${safeFileName(ctx.studentName)}.pdf`);
   }).catch(()=> toast('Không tạo được PDF, hãy thử "In trực tiếp" (Ctrl+P) rồi chọn Lưu thành PDF'));
 }
+function downloadReportPDF(){ downloadReportPDFFor(null); }
 
 function printReport(){
   if(!reportContext){ toast('Vui lòng tạo báo cáo trước'); return; }
