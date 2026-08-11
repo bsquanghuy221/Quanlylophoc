@@ -2766,7 +2766,7 @@ async function batchSetAll(collRef, items, idFn, stripId){
     const batch = fbDb.batch();
     chunk.forEach(item=>{
       const id = idFn(item);
-      const payload = stripId ? (({__id, ...rest})=>rest)(item) : item;
+      const payload = stripUndefinedDeep(stripId ? (({__id, ...rest})=>rest)(item) : item);
       batch.set(collRef.doc(id), payload);
     });
     await batch.commit();
@@ -2792,20 +2792,38 @@ function buildAppDataBundle(){
 // qua lại mới thấy cập nhật khi đánh dấu vắng/đi trễ.
 let lastAppBundleWriteAt = 0;
 let lastAttendanceWriteAt = {};
+
+// Firestore KHÔNG chấp nhận giá trị `undefined` trong dữ liệu ghi lên (ví dụ reasonCode/reasonNote
+// khi học sinh chưa từng được ghi lý do) — nếu lọt vào, .set() sẽ NÉM LỖI NGAY LẬP TỨC (đồng bộ,
+// không phải qua .catch()), làm dừng đột ngột hàm đang chạy (VD: cycleAttendance) và khiến giao diện
+// không kịp render, trông như "phải chuyển tab mới thấy cập nhật". Hàm này dọn sạch mọi giá trị
+// undefined khỏi payload trước khi gửi lên, để không bao giờ xảy ra lỗi này nữa.
+function stripUndefinedDeep(val){
+  if(val === undefined) return null;
+  if(val === null || typeof val !== 'object') return val;
+  if(Array.isArray(val)) return val.map(stripUndefinedDeep);
+  const out = {};
+  Object.keys(val).forEach(k=>{
+    if(val[k] === undefined) return;
+    out[k] = stripUndefinedDeep(val[k]);
+  });
+  return out;
+}
+
 function syncAppDataBundle(){
   if(!syncEnabled || !fbUser) return;
   lastAppBundleWriteAt = Date.now();
-  userDocRef(fbUser.uid).collection('app').doc('data').set(buildAppDataBundle()).catch(e=> console.warn('sync dữ liệu lớp lỗi', e));
+  userDocRef(fbUser.uid).collection('app').doc('data').set(stripUndefinedDeep(buildAppDataBundle())).catch(e=> console.warn('sync dữ liệu lớp lỗi', e));
 }
 function syncAttendanceDate(date){
   if(!syncEnabled || !fbUser || !date) return;
   lastAttendanceWriteAt[date] = Date.now();
   const entry = attendance[date] || {sang:{}, chieu:{}};
-  userDocRef(fbUser.uid).collection('attendance').doc(date).set(entry).catch(e=> console.warn('sync điểm danh lỗi', e));
+  userDocRef(fbUser.uid).collection('attendance').doc(date).set(stripUndefinedDeep(entry)).catch(e=> console.warn('sync điểm danh lỗi', e));
 }
 function syncPointsLogPut(entry){
   if(!syncEnabled || !fbUser) return;
-  userDocRef(fbUser.uid).collection('pointsLog').doc(entry.id).set(entry).catch(e=> console.warn('sync điểm lỗi', e));
+  userDocRef(fbUser.uid).collection('pointsLog').doc(entry.id).set(stripUndefinedDeep(entry)).catch(e=> console.warn('sync điểm lỗi', e));
 }
 function syncPointsLogDelete(id){
   if(!syncEnabled || !fbUser) return;
@@ -2813,7 +2831,7 @@ function syncPointsLogDelete(id){
 }
 function syncCommentPut(entry){
   if(!syncEnabled || !fbUser) return;
-  userDocRef(fbUser.uid).collection('commentsLog').doc(entry.id).set(entry).catch(e=> console.warn('sync nhận xét lỗi', e));
+  userDocRef(fbUser.uid).collection('commentsLog').doc(entry.id).set(stripUndefinedDeep(entry)).catch(e=> console.warn('sync nhận xét lỗi', e));
 }
 function syncCommentDelete(id){
   if(!syncEnabled || !fbUser) return;
