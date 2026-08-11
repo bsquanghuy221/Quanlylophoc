@@ -808,6 +808,19 @@
   </div>
 </div>
 
+<!-- SYNC CONFLICT MODAL (thay cho confirm() gốc — confirm() chặn toàn bộ trang, gây treo app) -->
+<div class="modal-overlay" id="syncConflictOverlay">
+  <div class="modal narrow">
+    <h3>⚠️ Có dữ liệu ở cả 2 nơi</h3>
+    <p class="muted" style="margin-top:-4px;">Máy này và đám mây đều đã có dữ liệu lớp học (có thể từ một thiết bị khác đã đăng nhập trước đó). Chọn một trong hai:</p>
+    <div class="modal-actions" style="flex-direction:column;gap:8px;align-items:stretch;">
+      <button class="btn" onclick="resolveSyncConflict(true)">☁️ Tải dữ liệu từ đám mây về máy này</button>
+      <button class="btn secondary" onclick="resolveSyncConflict(false)">💻 Giữ dữ liệu máy này, đẩy lên đám mây</button>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:10px;">Lựa chọn còn lại sẽ bị ghi đè. Nếu không chắc, bấm "Sao lưu dữ liệu" trước khi chọn.</p>
+  </div>
+</div>
+
 <!-- QUICK SCORE MODAL -->
 <div class="modal-overlay" id="scoreModalOverlay">
   <div class="modal narrow">
@@ -2657,8 +2670,25 @@ function detachSyncListeners(){
 
 function userDocRef(uid){ return fbDb.collection('users').doc(uid); }
 
+// ---- hỏi người dùng chọn tải từ đám mây hay đẩy lên đám mây, KHÔNG dùng confirm() vì confirm() chặn toàn bộ trang ----
+let syncConflictResolver = null;
+function askSyncConflict(){
+  return new Promise(resolve=>{
+    syncConflictResolver = resolve;
+    document.getElementById('syncConflictOverlay').classList.add('open');
+  });
+}
+function resolveSyncConflict(wantsCloud){
+  document.getElementById('syncConflictOverlay').classList.remove('open');
+  if(syncConflictResolver){ syncConflictResolver(wantsCloud); syncConflictResolver = null; }
+}
+
 // ---- lần đầu đăng nhập trên một thiết bị: quyết định tải từ đám mây, đẩy lên đám mây, hay không làm gì ----
+// Chỉ hỏi 1 LẦN cho mỗi (thiết bị, tài khoản) — các lần mở app sau đó tin tưởng vào lắng nghe thời gian thực (onSnapshot),
+// không hỏi lại mỗi lần mở app.
+function syncResolvedKey(uid){ return 'qllop1_sync_resolved_' + uid; }
 async function resolveInitialSync(user){
+  if(localStorage.getItem(syncResolvedKey(user.uid))) return;
   const appRef = userDocRef(user.uid).collection('app').doc('data');
   const snap = await appRef.get();
   const hasLocalData = students.length>0 || pointsLog.length>0 || Object.keys(attendance).length>0 || Object.keys(schedule).length>0;
@@ -2666,11 +2696,7 @@ async function resolveInitialSync(user){
     const remote = snap.data() || {};
     const remoteHasData = (remote.students && remote.students.length>0) || (remote.schedule && Object.keys(remote.schedule).length>0);
     if(hasLocalData && remoteHasData){
-      const wantsCloud = confirm(
-        'Tìm thấy dữ liệu lớp học đã có sẵn trên đám mây (từ một thiết bị khác đã đăng nhập trước đó).\n\n' +
-        'Bấm OK để TẢI dữ liệu từ đám mây về máy này (dữ liệu hiện có trên máy này sẽ bị ghi đè).\n' +
-        'Bấm Hủy để giữ dữ liệu trên máy này và ĐẨY lên đám mây (dữ liệu trên đám mây sẽ bị ghi đè).'
-      );
+      const wantsCloud = await askSyncConflict();
       if(wantsCloud) await pullFromCloud(user); else await pushFullStateToCloud(user);
     } else if(remoteHasData){
       await pullFromCloud(user);
@@ -2680,6 +2706,7 @@ async function resolveInitialSync(user){
   } else if(hasLocalData){
     await pushFullStateToCloud(user);
   }
+  localStorage.setItem(syncResolvedKey(user.uid), '1');
 }
 
 // ---- tải: đám mây -> máy này ----
