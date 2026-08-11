@@ -2786,12 +2786,19 @@ function buildAppDataBundle(){
   };
 }
 
+// Ghi lại thời điểm vừa ghi dữ liệu tại chính máy này — dùng để bỏ qua các bản snapshot "về muộn"
+// từ máy chủ (do độ trễ mạng) đè ngược lên thay đổi vừa thao tác, tránh hiện tượng phải chuyển tab
+// qua lại mới thấy cập nhật khi đánh dấu vắng/đi trễ.
+let lastAppBundleWriteAt = 0;
+let lastAttendanceWriteAt = {};
 function syncAppDataBundle(){
   if(!syncEnabled || !fbUser) return;
+  lastAppBundleWriteAt = Date.now();
   userDocRef(fbUser.uid).collection('app').doc('data').set(buildAppDataBundle()).catch(e=> console.warn('sync dữ liệu lớp lỗi', e));
 }
 function syncAttendanceDate(date){
   if(!syncEnabled || !fbUser || !date) return;
+  lastAttendanceWriteAt[date] = Date.now();
   const entry = attendance[date] || {sang:{}, chieu:{}};
   userDocRef(fbUser.uid).collection('attendance').doc(date).set(entry).catch(e=> console.warn('sync điểm danh lỗi', e));
 }
@@ -2818,6 +2825,9 @@ function attachSyncListeners(user){
 
   syncUnsubscribers.push(uref.collection('app').doc('data').onSnapshot(snap=>{
     if(!snap.exists || snap.metadata.hasPendingWrites) return;
+    // vừa ghi ở máy này trong vài giây gần đây — bỏ qua bản snapshot này để không đè ngược lên
+    // thay đổi vừa thao tác (tránh phải chuyển tab qua lại mới thấy cập nhật)
+    if(Date.now() - lastAppBundleWriteAt < 4000) return;
     const d = snap.data();
     if(d.students){
       students = d.students.map(s=>{
@@ -2839,9 +2849,14 @@ function attachSyncListeners(user){
     if(snap.metadata.hasPendingWrites) return;
     let changed = false;
     snap.docChanges().forEach(change=>{
+      const date = change.doc.id;
+      // vừa điểm danh ngày này ở máy này trong vài giây gần đây — bỏ qua bản snapshot muộn từ
+      // máy chủ để không đè ngược lên trạng thái vắng/đi trễ vừa bấm (đây chính là nguyên nhân
+      // phải chuyển tab qua lại mới thấy cập nhật)
+      if(lastAttendanceWriteAt[date] && (Date.now() - lastAttendanceWriteAt[date] < 4000)) return;
       changed = true;
-      if(change.type==='removed'){ delete attendance[change.doc.id]; }
-      else { attendance[change.doc.id] = change.doc.data(); }
+      if(change.type==='removed'){ delete attendance[date]; }
+      else { attendance[date] = change.doc.data(); }
     });
     if(changed){ saveAttendanceData(); renderSessionTab(); }
   }));
