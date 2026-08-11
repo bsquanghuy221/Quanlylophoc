@@ -885,7 +885,7 @@
 
 <!-- DETAIL MODAL -->
 <div class="modal-overlay" id="detailModalOverlay">
-  <div class="modal" id="detailModalContent"></div>
+  <div class="modal wide" id="detailModalContent"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1445,19 +1445,21 @@ function openDetail(id){
   const stats = attendanceStatsFor(id);
   const total = totalPointsFor(id);
   document.getElementById('detailModalContent').innerHTML = `
-    <div style="text-align:center;margin-bottom:10px;">
-      <div class="avatar" style="display:flex;justify-content:center;">${avatarHTML(s, 80)}</div>
-      <h3 style="margin:6px 0 0;">${escapeHtml(s.name)}${s.shortName?' <span class="muted" style="font-weight:400;">('+escapeHtml(s.shortName)+')</span>':''}</h3>
-      <span class="points-badge ${pointsBadgeClass(total)}" style="position:static;display:inline-flex;">${total>0?'+':''}${total} điểm</span>
-    </div>
-    <div class="detail-section">
-      <h4>Thông tin cơ bản</h4>
-      <p>Giới tính: ${s.gender||'—'} &nbsp;|&nbsp; Ngày sinh: ${formatDate(s.dob)||'—'} &nbsp;|&nbsp; Dân tộc: ${escapeHtml(s.ethnicity)||'—'}</p>
-      <p>Nơi sinh: ${escapeHtml(s.birthPlace)||'—'}</p>
-      <p>Nơi ở hiện tại: ${escapeHtml(s.address)||'—'}</p>
-      <p>Điện thoại liên hệ: ${escapeHtml(s.phone)||'—'}</p>
-      <p>Số định danh cá nhân: ${escapeHtml(s.nationalId)||'—'} &nbsp;|&nbsp; Mã ĐD Bộ GD&amp;ĐT: ${escapeHtml(s.moetId)||'—'}</p>
-      <p>Thẻ BHYT: ${escapeHtml(s.bhyt)||'—'}</p>
+    <div class="student-form-layout">
+      <div style="width:120px;flex-shrink:0;display:flex;justify-content:center;">${avatarHTML(s, 120)}</div>
+      <div style="flex:1;min-width:0;">
+        <h3 style="margin:0 0 4px;">${escapeHtml(s.name)}${s.shortName?' <span class="muted" style="font-weight:400;">('+escapeHtml(s.shortName)+')</span>':''}</h3>
+        <span class="points-badge ${pointsBadgeClass(total)}" style="position:static;display:inline-flex;">${total>0?'+':''}${total} điểm</span>
+        <div class="detail-section" style="margin-top:10px;margin-bottom:0;">
+          <h4>Thông tin cơ bản</h4>
+          <p>Giới tính: ${s.gender||'—'} &nbsp;|&nbsp; Ngày sinh: ${formatDate(s.dob)||'—'} &nbsp;|&nbsp; Dân tộc: ${escapeHtml(s.ethnicity)||'—'}</p>
+          <p>Nơi sinh: ${escapeHtml(s.birthPlace)||'—'}</p>
+          <p>Nơi ở hiện tại: ${escapeHtml(s.address)||'—'}</p>
+          <p>Điện thoại liên hệ: ${escapeHtml(s.phone)||'—'}</p>
+          <p>Số định danh cá nhân: ${escapeHtml(s.nationalId)||'—'} &nbsp;|&nbsp; Mã ĐD Bộ GD&amp;ĐT: ${escapeHtml(s.moetId)||'—'}</p>
+          <p>Thẻ BHYT: ${escapeHtml(s.bhyt)||'—'}</p>
+        </div>
+      </div>
     </div>
     <div class="detail-section">
       <h4>Điểm mạnh</h4>
