@@ -601,6 +601,9 @@
       <label>Tên gọi
         <input id="f_shortName" placeholder="VD: An">
       </label>
+      <label>Biệt danh khi điểm danh <span class="muted" style="font-weight:400;">(tùy chọn)</span>
+        <input id="f_nickname" placeholder="Để trống sẽ tự viết tắt, VD: Đ.M.Anh">
+      </label>
       <label>Giới tính
         <select id="f_gender"><option value="Nam">Nam</option><option value="Nữ">Nữ</option></select>
       </label>
@@ -898,11 +901,26 @@ if(criteria === null){
 }
 
 // full official field set (used for saving/loading student records)
-const STUDENT_FIELDS = ['name','shortName','gender','dob','phone','nationalId','moetId','birthPlace','ethnicity','bhyt','address','fatherName','fatherYob','fatherJob','fatherPhone','motherName','motherYob','motherJob','motherPhone','strengths','improvements','health','notes'];
+const STUDENT_FIELDS = ['name','shortName','nickname','gender','dob','phone','nationalId','moetId','birthPlace','ethnicity','bhyt','address','fatherName','fatherYob','fatherJob','fatherPhone','motherName','motherYob','motherJob','motherPhone','strengths','improvements','health','notes'];
 function blankStudent(){
   const o = {};
   STUDENT_FIELDS.forEach(f=> o[f]='');
   return o;
+}
+
+// Viết tắt họ + tên lót, giữ nguyên tên chính. VD: "Đoàn Mai Anh" -> "Đ.M.Anh"
+function abbreviateName(fullName){
+  const parts = (fullName||'').trim().split(/\s+/).filter(Boolean);
+  if(parts.length <= 1) return fullName || '';
+  const given = parts[parts.length-1];
+  const initials = parts.slice(0,-1).map(w=> w.charAt(0).toUpperCase()).join('.');
+  return initials + '.' + given;
+}
+// Tên hiển thị ở thẻ điểm danh/tiết học: ưu tiên biệt danh Cô tự đặt, sau đó tới viết tắt họ tên lót, cuối cùng là tên gọi/tên đầy đủ
+function displayShortName(s){
+  if(s.nickname && s.nickname.trim()) return s.nickname.trim();
+  const abbr = abbreviateName(s.name);
+  return abbr || s.shortName || s.name;
 }
 
 function saveStudents(){ localStorage.setItem(LS_STUDENTS, JSON.stringify(students)); }
@@ -1750,7 +1768,7 @@ function renderSessionTab(){
         <div class="avatar-wrap">
           <div class="avatar">${avatarHTML(s, 42)}</div>
         </div>
-        <div class="s-name">${escapeHtml(s.shortName || s.name)}</div>
+        <div class="s-name">${escapeHtml(displayShortName(s))}</div>
         <div class="att-segment" onclick="event.stopPropagation();">
           <button class="${segActive==='present' ? 'active st-present':''}" onclick="setAttendanceStatus('${s.id}','present')">Có mặt</button>
           <button class="${segActive==='absent' ? 'active st-absent':''}" onclick="setAttendanceStatus('${s.id}','absent')">Vắng</button>
@@ -1769,7 +1787,7 @@ function renderSessionTab(){
           <div class="avatar">${avatarHTML(s, 42)}</div>
           <div class="points-badge ${pointsBadgeClass(todayPts)}">${todayPts>0?'+':''}${todayPts}</div>
         </div>
-        <div class="s-name">${escapeHtml(s.shortName || s.name)}</div>
+        <div class="s-name">${escapeHtml(displayShortName(s))}</div>
       `;
       card.addEventListener('click', ()=>{
         if(multiMode){ toggleSelect(s.id, card); }
