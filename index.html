@@ -570,9 +570,18 @@
               </div>
               <button class="btn small" onclick="generateMonthlyReport()">🔄 Tạo báo cáo</button>
             </div>
-            <div style="margin-top:12px;">
+            <div class="muted" style="margin-top:6px;font-size:12px;">3 ô ghi chú bên dưới lưu riêng theo từng tháng — bấm "Tạo báo cáo" trước để nạp đúng ghi chú của tháng đang chọn.</div>
+            <div style="margin-top:10px;">
+              <label style="font-size:13px;color:var(--muted);font-weight:700;">🌟 Điểm mạnh trong tháng</label>
+              <textarea id="rp_strengths" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: học tốt Toán, hát hay, hòa đồng..." oninput="updateSingleNoteField('strengthsNote')"></textarea>
+            </div>
+            <div style="margin-top:10px;">
+              <label style="font-size:13px;color:var(--muted);font-weight:700;">🌱 Điểm cần cải thiện trong tháng</label>
+              <textarea id="rp_improvements" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: cần tập trung hơn, viết chữ chưa đẹp..." oninput="updateSingleNoteField('improvementsNote')"></textarea>
+            </div>
+            <div style="margin-top:10px;">
               <label style="font-size:13px;color:var(--muted);font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)</label>
-              <textarea id="rp_note" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..."></textarea>
+              <textarea id="rp_note" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..." oninput="updateSingleNoteField('note')"></textarea>
             </div>
           </div>
 
@@ -926,6 +935,7 @@ const LS_CRITERIA = 'qlLop1_criteria';
 const LS_POINTSLOG = 'qlLop1_pointsLog';
 const LS_SCHEDULE = 'qlLop1_schedule';
 const LS_COMMENTS = 'qlLop1_commentsLog';
+const LS_MONTHLY_NOTES = 'qlLop1_monthlyNotes';
 
 let students = JSON.parse(localStorage.getItem(LS_STUDENTS) || '[]');
 let attendance = JSON.parse(localStorage.getItem(LS_ATTENDANCE) || '{}');
@@ -946,6 +956,9 @@ let criteria = JSON.parse(localStorage.getItem(LS_CRITERIA) || 'null');
 let pointsLog = JSON.parse(localStorage.getItem(LS_POINTSLOG) || '[]');
 let schedule = JSON.parse(localStorage.getItem(LS_SCHEDULE) || '{}'); // { weekVal: { mon:{sang:[],chieu:[]}, ... } }
 let commentsLog = JSON.parse(localStorage.getItem(LS_COMMENTS) || '[]'); // [{id, studentId, date, periodId, periodLabel, text, ts}]
+// ghi chú báo cáo tháng, tách riêng theo từng (học sinh, tháng) để xem lại/so sánh tiến bộ qua các tháng
+// key dạng "<studentId>_<YYYY-MM>" -> {id, studentId, month, note, strengthsNote, improvementsNote, updatedAt}
+let monthlyNotes = JSON.parse(localStorage.getItem(LS_MONTHLY_NOTES) || '{}');
 
 if(criteria === null){
   criteria = [
@@ -989,6 +1002,7 @@ function saveCriteriaData(){ localStorage.setItem(LS_CRITERIA, JSON.stringify(cr
 function savePointsLog(){ localStorage.setItem(LS_POINTSLOG, JSON.stringify(pointsLog)); }
 function saveSchedule(){ localStorage.setItem(LS_SCHEDULE, JSON.stringify(schedule)); }
 function saveCommentsLog(){ localStorage.setItem(LS_COMMENTS, JSON.stringify(commentsLog)); }
+function saveMonthlyNotesData(){ localStorage.setItem(LS_MONTHLY_NOTES, JSON.stringify(monthlyNotes)); }
 
 function uid(prefix){ return (prefix||'id') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7); }
 
@@ -2563,19 +2577,39 @@ function commentsForRange(studentId, start, end){
     .sort((a,b)=> a.date.localeCompare(b.date) || a.ts-b.ts);
 }
 
-// tính toán dữ liệu báo cáo của 1 học sinh trong 1 tháng (dùng chung cho cả 2 chế độ)
-function buildReportContext(s, monthVal, note){
+// ghi chú báo cáo tháng (lời nhắn phụ huynh / điểm mạnh / điểm cần cải thiện) được lưu riêng theo
+// từng (học sinh, tháng) — để tháng nào giữ đúng ghi chú của tháng đó, không bị dính từ tháng trước
+// sang, và Cô có thể xem lại/so sánh ghi chú giữa các tháng để thấy được tiến bộ của từng em.
+function monthlyNoteKey(studentId, month){ return studentId + '_' + month; }
+function getMonthlyNote(studentId, month){
+  return monthlyNotes[monthlyNoteKey(studentId, month)] || {note:'', strengthsNote:'', improvementsNote:''};
+}
+function setMonthlyNoteField(studentId, month, field, value){
+  const key = monthlyNoteKey(studentId, month);
+  const entry = monthlyNotes[key] || {id: key, studentId, month, note:'', strengthsNote:'', improvementsNote:''};
+  entry[field] = value;
+  entry.updatedAt = Date.now();
+  monthlyNotes[key] = entry;
+  saveMonthlyNotesData();
+  syncMonthlyNotePut(entry);
+}
+
+// tính toán dữ liệu báo cáo của 1 học sinh trong 1 tháng (dùng chung cho cả 2 chế độ) — luôn đọc
+// ghi chú (lời nhắn/điểm mạnh/điểm cần cải thiện) đúng của tháng đang xem, không lấy nhầm tháng khác
+function buildReportContext(s, monthVal){
   const {start, end, m, y} = monthRange(monthVal);
   const att = attendanceStatsForRange(s.id, start, end);
   const pts = pointsBreakdownForRange(s.id, start, end);
   const cmts = commentsForRange(s.id, start, end);
   const monthLabel = `Tháng ${m}/${y}`;
-  return {studentId: s.id, studentName: s.name, month: monthVal, monthLabel, att, pts, cmts, note: note || ''};
+  const mn = getMonthlyNote(s.id, monthVal);
+  return {studentId: s.id, studentName: s.name, month: monthVal, monthLabel, att, pts, cmts,
+    note: mn.note || '', strengthsNote: mn.strengthsNote || '', improvementsNote: mn.improvementsNote || ''};
 }
 
 // render nội dung HTML của báo cáo (dùng chung cho preview 1 em và cho từng thẻ trong chế độ cả lớp)
 function renderReportBodyHTML(s, ctx){
-  const {att, pts, cmts, note, monthLabel} = ctx;
+  const {att, pts, cmts, note, strengthsNote, improvementsNote, monthLabel} = ctx;
   const positives = pts.list.filter(c=>c.type==='positive');
   const negatives = pts.list.filter(c=>c.type==='negative');
   return `
@@ -2586,7 +2620,7 @@ function renderReportBodyHTML(s, ctx){
     </div>
     <div class="detail-section">
       <h4>📅 Chuyên cần trong tháng</h4>
-      <p>Có mặt: <b>${att.present}</b> · Vắng có phép: <b>${att.excused}</b> · Vắng không phép: <b>${att.absent}</b> · Đi trễ: <b>${att.late}</b></p>
+      <p>Vắng có phép: <b>${att.excused}</b> · Vắng không phép: <b>${att.absent}</b> · Đi trễ: <b>${att.late}</b></p>
       <p>Tỉ lệ chuyên cần: <span class="${att.pct<90?'pct-low':'pct-ok'}">${att.total ? att.pct+'%' : 'Chưa có dữ liệu'}</span></p>
     </div>
     <div class="detail-section">
@@ -2601,12 +2635,12 @@ function renderReportBodyHTML(s, ctx){
       ${cmts.length ? cmts.map(c=>`<p><b>${formatDate(c.date)}</b> · <span class="muted">${escapeHtml(c.periodLabel||'Cả ngày')}</span><br>${escapeHtml(c.text)}</p>`).join('') : '<p class="muted">Chưa có nhận xét nào trong tháng.</p>'}
     </div>
     <div class="detail-section">
-      <h4>🌟 Điểm mạnh</h4>
-      <p>${escapeHtml(s.strengths) || 'Chưa có ghi chú'}</p>
+      <h4>🌟 Điểm mạnh trong tháng</h4>
+      <p style="white-space:pre-wrap;">${strengthsNote ? escapeHtml(strengthsNote) : 'Chưa có ghi chú'}</p>
     </div>
     <div class="detail-section">
-      <h4>🌱 Điểm cần cải thiện</h4>
-      <p>${escapeHtml(s.improvements) || 'Chưa có ghi chú'}</p>
+      <h4>🌱 Điểm cần cải thiện trong tháng</h4>
+      <p style="white-space:pre-wrap;">${improvementsNote ? escapeHtml(improvementsNote) : 'Chưa có ghi chú'}</p>
     </div>
     ${note ? `<div class="detail-section"><h4>💌 Lời nhắn của giáo viên</h4><p style="white-space:pre-wrap;">${escapeHtml(note)}</p></div>` : ''}
   `;
@@ -2619,40 +2653,57 @@ function generateMonthlyReport(){
   if(!monthVal){ toast('Vui lòng chọn tháng'); return; }
   const s = students.find(x=>x.id===studentId);
   if(!s) return;
-  const note = document.getElementById('rp_note').value.trim();
-  reportContext = buildReportContext(s, monthVal, note);
+  reportContext = buildReportContext(s, monthVal);
+  // nạp đúng ghi chú của tháng đang xem vào 3 ô nhập — ghi đè bất cứ nội dung nào còn sót lại
+  // từ lần xem tháng/học sinh trước đó, để không bị lẫn ghi chú giữa các tháng
+  document.getElementById('rp_note').value = reportContext.note;
+  document.getElementById('rp_strengths').value = reportContext.strengthsNote;
+  document.getElementById('rp_improvements').value = reportContext.improvementsNote;
   document.getElementById('reportPreview').innerHTML = renderReportBodyHTML(s, reportContext);
   document.getElementById('reportPreviewCard').style.display = '';
   document.getElementById('reportEmpty').style.display = 'none';
 }
 
-// tạo báo cáo cho TOÀN BỘ học sinh trong lớp cùng lúc theo 1 tháng — mỗi em có ô nhận xét
-// và bộ nút tải riêng ngay bên dưới, không cần chọn/tạo từng em một như chế độ "Từng học sinh"
+// gõ vào 1 trong 3 ô (lời nhắn/điểm mạnh/điểm cần cải thiện) ở chế độ Từng học sinh -> lưu ngay
+// theo đúng (học sinh, tháng) đang xem rồi cập nhật lại phần xem trước
+function updateSingleNoteField(field){
+  if(!reportContext) return;
+  const elId = field==='note' ? 'rp_note' : (field==='strengthsNote' ? 'rp_strengths' : 'rp_improvements');
+  const value = document.getElementById(elId).value.trim();
+  setMonthlyNoteField(reportContext.studentId, reportContext.month, field, value);
+  reportContext[field] = value;
+  const s = students.find(x=>x.id===reportContext.studentId);
+  if(s) document.getElementById('reportPreview').innerHTML = renderReportBodyHTML(s, reportContext);
+}
+
+// tạo báo cáo cho TOÀN BỘ học sinh trong lớp cùng lúc theo 1 tháng — mỗi em có 3 ô ghi chú
+// (lời nhắn / điểm mạnh / điểm cần cải thiện) + bộ nút tải riêng ngay bên dưới. Ghi chú luôn
+// được nạp đúng theo (học sinh, tháng) đang chọn — đổi sang tháng khác sẽ không còn thấy ghi
+// chú của tháng trước, vì mỗi tháng lưu riêng (xem lại tháng cũ vẫn còn nguyên).
 function generateBatchReports(){
   const monthVal = document.getElementById('rpb_month').value;
   if(!monthVal){ toast('Vui lòng chọn tháng'); return; }
   if(!students.length){ toast('Lớp chưa có học sinh nào'); return; }
 
-  // giữ lại lời nhắn đang gõ dở (nếu bấm tạo lại) để không bị mất
-  const prevNotes = {};
-  students.forEach(s=>{
-    const ta = document.getElementById('batchNote_'+s.id);
-    if(ta) prevNotes[s.id] = ta.value;
-  });
-
   const sorted = [...students].sort(byGivenName);
   batchReportContexts = {};
   const list = document.getElementById('reportBatchList');
   list.innerHTML = sorted.map(s=>{
-    const note = (prevNotes[s.id] || '').trim();
-    const ctx = buildReportContext(s, monthVal, note);
+    const ctx = buildReportContext(s, monthVal);
     batchReportContexts[s.id] = ctx;
     return `
       <div class="card">
         <div class="report-card" id="batchPreview_${s.id}">${renderReportBodyHTML(s, ctx)}</div>
-        <div style="margin-top:10px;">
-          <label class="muted" style="font-size:12px;font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)</label>
-          <textarea id="batchNote_${s.id}" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..." oninput="updateBatchNote('${s.id}')">${escapeHtml(note)}</textarea>
+        <div style="margin-top:10px;display:grid;gap:8px;">
+          <label class="muted" style="font-size:12px;font-weight:700;">🌟 Điểm mạnh trong tháng
+            <textarea id="batchStrengths_${s.id}" rows="2" style="width:100%;margin-top:4px;font-weight:400;" placeholder="VD: học tốt Toán, hát hay, hòa đồng..." oninput="updateBatchNoteField('${s.id}','strengthsNote')">${escapeHtml(ctx.strengthsNote)}</textarea>
+          </label>
+          <label class="muted" style="font-size:12px;font-weight:700;">🌱 Điểm cần cải thiện trong tháng
+            <textarea id="batchImprovements_${s.id}" rows="2" style="width:100%;margin-top:4px;font-weight:400;" placeholder="VD: cần tập trung hơn, viết chữ chưa đẹp..." oninput="updateBatchNoteField('${s.id}','improvementsNote')">${escapeHtml(ctx.improvementsNote)}</textarea>
+          </label>
+          <label class="muted" style="font-size:12px;font-weight:700;">💌 Lời nhắn thêm cho phụ huynh (tùy chọn)
+            <textarea id="batchNote_${s.id}" rows="2" style="width:100%;margin-top:4px;font-weight:400;" placeholder="VD: Con đã tiến bộ nhiều trong tháng qua, cô mong con tiếp tục phát huy..." oninput="updateBatchNoteField('${s.id}','note')">${escapeHtml(ctx.note)}</textarea>
+          </label>
         </div>
         <div class="row report-actions" style="margin-top:12px;">
           <button class="btn small" onclick="downloadReportPDFFor('${s.id}')">📄 Tải PDF</button>
@@ -2666,25 +2717,28 @@ function generateBatchReports(){
   toast(`Đã tạo báo cáo cho ${sorted.length} học sinh`);
 }
 
-// gõ lời nhắn cho 1 em trong chế độ cả lớp -> cập nhật lại preview của đúng thẻ đó (không đụng các thẻ khác)
-function updateBatchNote(studentId){
+// gõ vào 1 trong 3 ô ghi chú của 1 em trong chế độ cả lớp -> lưu theo đúng (học sinh, tháng)
+// rồi cập nhật lại preview của đúng thẻ đó (không đụng các thẻ khác)
+function updateBatchNoteField(studentId, field){
   const ctx = batchReportContexts[studentId];
   const s = students.find(x=>x.id===studentId);
   if(!ctx || !s) return;
-  ctx.note = document.getElementById('batchNote_'+studentId).value.trim();
+  const elId = field==='note' ? 'batchNote_'+studentId : (field==='strengthsNote' ? 'batchStrengths_'+studentId : 'batchImprovements_'+studentId);
+  const value = document.getElementById(elId).value.trim();
+  setMonthlyNoteField(studentId, ctx.month, field, value);
+  ctx[field] = value;
   document.getElementById('batchPreview_'+studentId).innerHTML = renderReportBodyHTML(s, ctx);
 }
 
 function buildReportPlainTextFor(ctx){
   if(!ctx) return '';
-  const {studentName, monthLabel, att, pts, cmts, note} = ctx;
-  const s = students.find(x=>x.id===ctx.studentId) || {};
+  const {studentName, monthLabel, att, pts, cmts, note, strengthsNote, improvementsNote} = ctx;
   const lines = [];
   lines.push(`BÁO CÁO ${monthLabel.toUpperCase()} — ${studentName}`);
   if(classNameInput.value) lines.push(`Lớp: ${classNameInput.value}`);
   lines.push('');
   lines.push('CHUYÊN CẦN');
-  lines.push(`Có mặt: ${att.present} · Vắng có phép: ${att.excused} · Vắng không phép: ${att.absent} · Đi trễ: ${att.late}`);
+  lines.push(`Vắng có phép: ${att.excused} · Vắng không phép: ${att.absent} · Đi trễ: ${att.late}`);
   lines.push(`Tỉ lệ chuyên cần: ${att.total ? att.pct+'%' : 'Chưa có dữ liệu'}`);
   lines.push('');
   lines.push('KẾT QUẢ RÈN LUYỆN');
@@ -2694,8 +2748,8 @@ function buildReportPlainTextFor(ctx){
   lines.push(`NHẬN XÉT TRONG THÁNG (${cmts.length})`);
   cmts.forEach(c=> lines.push(`- ${formatDate(c.date)}: ${c.text}`));
   lines.push('');
-  lines.push('ĐIỂM MẠNH: ' + (s.strengths || 'Chưa có ghi chú'));
-  lines.push('ĐIỂM CẦN CẢI THIỆN: ' + (s.improvements || 'Chưa có ghi chú'));
+  lines.push('ĐIỂM MẠNH TRONG THÁNG: ' + (strengthsNote || 'Chưa có ghi chú'));
+  lines.push('ĐIỂM CẦN CẢI THIỆN TRONG THÁNG: ' + (improvementsNote || 'Chưa có ghi chú'));
   if(note){ lines.push(''); lines.push('LỜI NHẮN CỦA GIÁO VIÊN: ' + note); }
   return lines.join('\n');
 }
@@ -2774,7 +2828,7 @@ function printReport(){
 
 // ================= BACKUP / RESTORE =================
 function backupData(){
-  const data = { students, attendance, classInfo, criteria, pointsLog, schedule, commentsLog, className: classNameInput.value, exportedAt: new Date().toISOString() };
+  const data = { students, attendance, classInfo, criteria, pointsLog, schedule, commentsLog, monthlyNotes, className: classNameInput.value, exportedAt: new Date().toISOString() };
   downloadFile('sao-luu-lop-hoc-' + new Date().toISOString().slice(0,10) + '.json', JSON.stringify(data,null,2), 'application/json');
 }
 function restoreData(evt){
@@ -2793,8 +2847,9 @@ function restoreData(evt){
       pointsLog = data.pointsLog || [];
       schedule = data.schedule || {};
       commentsLog = data.commentsLog || [];
+      monthlyNotes = data.monthlyNotes || {};
       if(data.className){ classNameInput.value = data.className; localStorage.setItem(LS_CLASSNAME, data.className); }
-      saveStudents(); saveAttendanceData(); saveClassInfoData(); saveCriteriaData(); savePointsLog(); saveSchedule(); saveCommentsLog();
+      saveStudents(); saveAttendanceData(); saveClassInfoData(); saveCriteriaData(); savePointsLog(); saveSchedule(); saveCommentsLog(); saveMonthlyNotesData();
       renderStudents(); renderSessionTab(); renderCriteriaTab(); renderStatsTab(); renderHomeTab();
       if(document.getElementById('tab-schedule').style.display !== 'none') renderScheduleTab();
       if(syncEnabled && fbUser){ pushFullStateToCloud(fbUser); toast('Đã phục hồi dữ liệu và đẩy lên đám mây'); }
@@ -2964,6 +3019,12 @@ async function pullFromCloud(user){
   commentsLog = newComments;
   saveCommentsLog();
 
+  const mnSnap = await uref.collection('monthlyNotes').get();
+  const newMonthlyNotes = {};
+  mnSnap.forEach(doc=> newMonthlyNotes[doc.id] = doc.data());
+  monthlyNotes = newMonthlyNotes;
+  saveMonthlyNotesData();
+
   refreshAllTabs();
   toast('Đã tải dữ liệu từ đám mây về máy này');
 }
@@ -2975,6 +3036,7 @@ async function pushFullStateToCloud(user){
   await batchSetAll(uref.collection('attendance'), Object.keys(attendance).map(date=>({__id:date, ...attendance[date]})), item=>item.__id, true);
   await batchSetAll(uref.collection('pointsLog'), pointsLog, item=>item.id, false);
   await batchSetAll(uref.collection('commentsLog'), commentsLog, item=>item.id, false);
+  await batchSetAll(uref.collection('monthlyNotes'), Object.values(monthlyNotes), item=>item.id, false);
   toast('Đã đẩy dữ liệu từ máy này lên đám mây');
 }
 
@@ -3055,6 +3117,10 @@ function syncCommentDelete(id){
   if(!syncEnabled || !fbUser) return;
   userDocRef(fbUser.uid).collection('commentsLog').doc(id).delete().catch(e=> console.warn('sync xóa nhận xét lỗi', e));
 }
+function syncMonthlyNotePut(entry){
+  if(!syncEnabled || !fbUser) return;
+  userDocRef(fbUser.uid).collection('monthlyNotes').doc(entry.id).set(stripUndefinedDeep(entry)).catch(e=> console.warn('sync ghi chú báo cáo tháng lỗi', e));
+}
 
 // ---- lắng nghe thời gian thực: đám mây -> máy này (để thay đổi từ thiết bị khác tự hiện ra ở đây) ----
 function attachSyncListeners(user){
@@ -3120,6 +3186,17 @@ function attachSyncListeners(user){
       else { const data = change.doc.data(); if(idx>=0) commentsLog[idx] = data; else commentsLog.push(data); }
     });
     if(changed){ saveCommentsLog(); renderSessionTab(); }
+  }));
+
+  syncUnsubscribers.push(uref.collection('monthlyNotes').onSnapshot(snap=>{
+    if(snap.metadata.hasPendingWrites) return;
+    let changed = false;
+    snap.docChanges().forEach(change=>{
+      changed = true;
+      if(change.type==='removed'){ delete monthlyNotes[change.doc.id]; }
+      else { monthlyNotes[change.doc.id] = change.doc.data(); }
+    });
+    if(changed) saveMonthlyNotesData();
   }));
 }
 
