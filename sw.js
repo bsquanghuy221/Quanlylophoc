@@ -2,7 +2,7 @@
 // Strategy: stale-while-revalidate. Serve from cache instantly when available (fast + works offline),
 // while always fetching fresh copies in the background to keep the cache up to date for next time.
 
-const CACHE_NAME = 'qllop1-cache-v1';
+const CACHE_NAME = 'qllop1-cache-v2'; // bump version whenever cached assets (icons, etc.) change, to force old cache to be discarded
 const CORE_ASSETS = [
   './',
   './index.html',
