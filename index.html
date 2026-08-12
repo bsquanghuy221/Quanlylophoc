@@ -564,13 +564,13 @@
             <div class="row between">
               <div class="row">
                 <label style="font-size:13px;color:var(--muted);font-weight:700;">Học sinh</label>
-                <select id="rp_student" style="min-width:200px;"></select>
+                <select id="rp_student" style="min-width:200px;" onchange="generateMonthlyReport()"></select>
                 <label style="font-size:13px;color:var(--muted);font-weight:700;margin-left:6px;">Tháng</label>
-                <input type="month" id="rp_month">
+                <input type="month" id="rp_month" onchange="generateMonthlyReport()">
               </div>
-              <button class="btn small" onclick="generateMonthlyReport()">🔄 Tạo báo cáo</button>
+              <button class="btn secondary small" onclick="generateMonthlyReport()">🔄 Làm mới</button>
             </div>
-            <div class="muted" style="margin-top:6px;font-size:12px;">3 ô ghi chú bên dưới lưu riêng theo từng tháng — bấm "Tạo báo cáo" trước để nạp đúng ghi chú của tháng đang chọn.</div>
+            <div class="muted" style="margin-top:6px;font-size:12px;">Đổi học sinh/tháng là báo cáo tự hiện ngay — 3 ô ghi chú bên dưới cũng tự nạp đúng ghi chú của tháng đang chọn.</div>
             <div style="margin-top:10px;">
               <label style="font-size:13px;color:var(--muted);font-weight:700;">🌟 Điểm mạnh trong tháng</label>
               <textarea id="rp_strengths" rows="2" style="width:100%;margin-top:4px;" placeholder="VD: học tốt Toán, hát hay, hòa đồng..." oninput="updateSingleNoteField('strengthsNote')"></textarea>
@@ -589,11 +589,11 @@
             <div class="row between">
               <div class="row">
                 <label style="font-size:13px;color:var(--muted);font-weight:700;">Tháng</label>
-                <input type="month" id="rpb_month">
+                <input type="month" id="rpb_month" onchange="generateBatchReports()">
               </div>
-              <button class="btn small" onclick="generateBatchReports()">🔄 Tạo báo cáo cho cả lớp</button>
+              <button class="btn secondary small" onclick="generateBatchReports()">🔄 Làm mới</button>
             </div>
-            <div class="muted" style="margin-top:8px;">App sẽ tạo sẵn báo cáo cho toàn bộ học sinh theo tháng đã chọn — cuộn xuống, viết thêm lời nhắn riêng cho từng em rồi tải PDF/ảnh để gửi phụ huynh.</div>
+            <div class="muted" style="margin-top:8px;">Đổi tháng là báo cáo cho cả lớp tự hiện ngay — cuộn xuống, viết thêm lời nhắn riêng cho từng em rồi tải PDF/ảnh để gửi phụ huynh.</div>
           </div>
 
           <div class="muted" style="margin-top:8px;">App chưa có máy chủ để tạo link xem online, nên báo cáo được xuất thành ảnh / PDF / văn bản để gửi trực tiếp qua Zalo hoặc tin nhắn cho phụ huynh.</div>
@@ -2511,6 +2511,10 @@ function initReportTab(){
   if(!monthInput.value) monthInput.value = new Date().toISOString().slice(0,7);
   const monthInputB = document.getElementById('rpb_month');
   if(!monthInputB.value) monthInputB.value = new Date().toISOString().slice(0,7);
+  // tự hiện sẵn báo cáo ngay khi mở tab, không cần bấm nút — theo đúng chế độ đang chọn
+  const mode = document.querySelector('#reportModeToggle button.active');
+  if(mode && mode.dataset.mode==='batch') generateBatchReports();
+  else if(sel.value) generateMonthlyReport();
 }
 // jump to the Báo cáo tháng tab pre-filled for one student (used by the "📮 Báo cáo tháng" button in student detail)
 function goToStudentReport(studentId){
@@ -2527,6 +2531,9 @@ function setReportMode(mode){
   document.getElementById('reportBatchControls').style.display = mode==='batch' ? '' : 'none';
   document.getElementById('reportSingleResult').style.display = mode==='single' ? '' : 'none';
   document.getElementById('reportBatchResult').style.display = mode==='batch' ? '' : 'none';
+  // tự tạo báo cáo ngay khi chuyển chế độ, không cần bấm nút thêm lần nữa
+  if(mode==='batch') generateBatchReports();
+  else if(document.getElementById('rp_student').value) generateMonthlyReport();
 }
 
 function monthRange(monthStr){
