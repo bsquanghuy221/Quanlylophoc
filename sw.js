@@ -2,7 +2,7 @@
 // Strategy: stale-while-revalidate. Serve from cache instantly when available (fast + works offline),
 // while always fetching fresh copies in the background to keep the cache up to date for next time.
 
-const CACHE_NAME = 'qllop1-cache-v2'; // bump version whenever cached assets (icons, etc.) change, to force old cache to be discarded
+const CACHE_NAME = 'qllop1-cache-v3'; // bump version whenever cached assets (icons, etc.) change, to force old cache to be discarded
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -10,7 +10,8 @@ const CORE_ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './xem-bao-cao.html'
 ];
 
 self.addEventListener('install', event => {

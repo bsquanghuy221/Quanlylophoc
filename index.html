@@ -607,6 +607,7 @@
               <button class="btn secondary" onclick="downloadReportImage()">🖼️ Tải ảnh báo cáo</button>
               <button class="btn secondary" onclick="printReport()">🖨️ In trực tiếp</button>
               <button class="btn secondary" onclick="copyReportText()">📋 Sao chép nội dung</button>
+              <button class="btn secondary" onclick="shareReportLink(null)">🔗 Link cho phụ huynh</button>
             </div>
           </div>
           <div id="reportEmpty" class="empty">Chọn học sinh và tháng, sau đó bấm "Tạo báo cáo" để xem trước.</div>
@@ -2669,6 +2670,8 @@ function generateMonthlyReport(){
   document.getElementById('reportPreview').innerHTML = renderReportBodyHTML(s, reportContext);
   document.getElementById('reportPreviewCard').style.display = '';
   document.getElementById('reportEmpty').style.display = 'none';
+  // em nào đã có link chia sẻ cho phụ huynh từ trước thì tự cập nhật link đó luôn, khỏi phải bấm lại
+  if(s.shareToken) publishReportShare(s.id, reportContext);
 }
 
 // gõ vào 1 trong 3 ô (lời nhắn/điểm mạnh/điểm cần cải thiện) ở chế độ Từng học sinh -> lưu ngay
@@ -2681,6 +2684,7 @@ function updateSingleNoteField(field){
   reportContext[field] = value;
   const s = students.find(x=>x.id===reportContext.studentId);
   if(s) document.getElementById('reportPreview').innerHTML = renderReportBodyHTML(s, reportContext);
+  if(s && s.shareToken) publishReportShare(s.id, reportContext);
 }
 
 // tạo báo cáo cho TOÀN BỘ học sinh trong lớp cùng lúc theo 1 tháng — mỗi em có 3 ô ghi chú
@@ -2698,6 +2702,7 @@ function generateBatchReports(){
   list.innerHTML = sorted.map(s=>{
     const ctx = buildReportContext(s, monthVal);
     batchReportContexts[s.id] = ctx;
+    if(s.shareToken) publishReportShare(s.id, ctx);
     return `
       <div class="card">
         <div class="report-card" id="batchPreview_${s.id}">${renderReportBodyHTML(s, ctx)}</div>
@@ -2716,6 +2721,7 @@ function generateBatchReports(){
           <button class="btn small" onclick="downloadReportPDFFor('${s.id}')">📄 Tải PDF</button>
           <button class="btn secondary small" onclick="downloadReportImageFor('${s.id}')">🖼️ Tải ảnh</button>
           <button class="btn secondary small" onclick="copyReportTextFor('${s.id}')">📋 Sao chép</button>
+          <button class="btn secondary small" onclick="shareReportLink('${s.id}')">🔗 Link cho phụ huynh</button>
         </div>
       </div>
     `;
@@ -2735,6 +2741,7 @@ function updateBatchNoteField(studentId, field){
   setMonthlyNoteField(studentId, ctx.month, field, value);
   ctx[field] = value;
   document.getElementById('batchPreview_'+studentId).innerHTML = renderReportBodyHTML(s, ctx);
+  if(s.shareToken) publishReportShare(studentId, ctx);
 }
 
 function buildReportPlainTextFor(ctx){
@@ -2831,6 +2838,70 @@ function downloadReportPDF(){ downloadReportPDFFor(null); }
 function printReport(){
   if(!reportContext){ toast('Vui lòng tạo báo cáo trước'); return; }
   window.print();
+}
+
+// ================= LINK CHIA SẺ BÁO CÁO CHO PHỤ HUYNH (xem-bao-cao.html) =================
+// Mỗi học sinh có 1 mã (token) ngẫu nhiên, khó đoán. Ai có đúng link mới xem được báo cáo của
+// đúng em đó — không cần phụ huynh đăng nhập, và không nhìn thấy dữ liệu của học sinh khác trong
+// lớp. Cần đã đăng nhập đồng bộ Google (Firestore) thì tính năng này mới hoạt động được.
+function generateShareToken(){
+  const bytes = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(bytes);
+  return Array.from(bytes).map(b=> b.toString(16).padStart(2,'0')).join('');
+}
+function shareViewerUrl(token){
+  const path = location.pathname.replace(/[^/]*$/, '');
+  return location.origin + path + 'xem-bao-cao.html?ma=' + token;
+}
+// đảm bảo học sinh đã có token, ghi doc "định danh" công khai lên Firestore (chỉ tên + lớp + giới
+// tính để chọn avatar chibi — KHÔNG chứa điểm/điểm danh/ảnh chân dung thật)
+async function ensureShareToken(studentId){
+  const s = students.find(x=>x.id===studentId);
+  if(!s || !syncEnabled || !fbUser) return null;
+  if(!s.shareToken){
+    s.shareToken = generateShareToken();
+    saveStudents();
+    syncAppDataBundle();
+  }
+  await fbDb.collection('shares').doc(s.shareToken).set({
+    teacherUid: fbUser.uid, studentId: s.id, studentName: s.name,
+    className: classNameInput.value || 'Lớp học', gender: s.gender || 'Nam',
+    updatedAt: Date.now()
+  }, {merge:true});
+  return s.shareToken;
+}
+// đăng nội dung báo cáo 1 tháng của 1 em lên link công khai (không kèm ảnh chân dung thật)
+async function publishReportShare(studentId, ctx){
+  if(!syncEnabled || !fbUser || !ctx) return;
+  const s = students.find(x=>x.id===studentId);
+  if(!s || !s.shareToken) return;
+  const payload = stripUndefinedDeep({
+    monthLabel: ctx.monthLabel, att: ctx.att, pts: ctx.pts, cmts: ctx.cmts,
+    note: ctx.note, strengthsNote: ctx.strengthsNote, improvementsNote: ctx.improvementsNote,
+    publishedAt: Date.now()
+  });
+  try{
+    await fbDb.collection('shares').doc(s.shareToken).collection('months').doc(ctx.month).set(payload);
+  }catch(e){ console.warn('publish báo cáo lên link chia sẻ lỗi', e); }
+}
+// Cô bấm "Link cho phụ huynh": tạo token nếu chưa có, đăng báo cáo đang xem lên, rồi sao chép link
+async function shareReportLink(studentId){
+  if(!syncEnabled || !fbUser){ toast('Cần đăng nhập đồng bộ Google (ở sidebar) trước khi dùng tính năng này'); return; }
+  const ctx = studentId ? batchReportContexts[studentId] : reportContext;
+  if(!ctx){ toast('Vui lòng tạo báo cáo trước'); return; }
+  const sid = studentId || ctx.studentId;
+  toast('Đang tạo link...');
+  try{
+    const token = await ensureShareToken(sid);
+    await publishReportShare(sid, ctx);
+    const url = shareViewerUrl(token);
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(url);
+      toast('Đã sao chép link báo cáo của ' + ctx.studentName + ' — gửi cho phụ huynh qua Zalo');
+    } else {
+      window.prompt('Sao chép link báo cáo:', url);
+    }
+  }catch(e){ toast('Không tạo được link, thử lại (kiểm tra kết nối mạng)'); console.warn(e); }
 }
 
 // ================= BACKUP / RESTORE =================
